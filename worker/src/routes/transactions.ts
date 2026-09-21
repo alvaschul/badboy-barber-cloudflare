@@ -1,17 +1,23 @@
-import { Router } from '../utils/router';
+import { Router, type Context } from '../utils/router';
 import { verifyToken } from '../utils/jwt';
 
 function parsePositiveInteger(value: unknown, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (value === undefined || value === null) {
+    throw new Error(`${label} is required`);
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`${label} must be a positive integer`);
   }
   return parsed;
 }
 
 function parseNonNegativeNumber(value: unknown, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (isNaN(parsed) || parsed < 0) {
     throw new Error(`${label} must be a non-negative number`);
   }
   return parsed;
@@ -46,7 +52,6 @@ async function requireAuth(req: Request, env: any): Promise<{ ok: boolean; respo
 export function transactionsRoutes() {
   const router = new Router();
 
-  // POST /api/transactions - create transaction
   router.post('/', async (req: Request, env: any, ctx: Context) => {
     try {
       const auth = await requireAuth(req, env);
@@ -59,15 +64,16 @@ export function transactionsRoutes() {
         total_amount?: number | string;
         change_amount?: number | string;
         notes?: string;
-        user_id?: number | string;
         cabang_id?: number | string;
       };
 
+      const userId = auth.payload.user_id as number;
+      
       const items = Array.isArray(body.items) ? body.items : [];
       if (items.length === 0) {
         return new Response(JSON.stringify({ detail: 'At least one item is required' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*' }
+          headers: { 'Content-Type': 'application/json' }
         });
       }
 
@@ -83,7 +89,7 @@ export function transactionsRoutes() {
         if (!itemRecord || itemRecord.is_active !== 1) {
           return new Response(JSON.stringify({ detail: `Item ${itemId} not found or inactive` }), {
             status: 400,
-            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*' }
+            headers: { 'Content-Type': 'application/json' }
           });
         }
 
@@ -94,98 +100,71 @@ export function transactionsRoutes() {
 
       const cash = parseNonNegativeNumber(body.cash_amount ?? 0, 'Cash amount');
       const qris = parseNonNegativeNumber(body.qris_amount ?? 0, 'QRIS amount');
-      const userId = parsePositiveInteger(body.user_id, 'User id');
-      const user = await db.prepare('SELECT id FROM users WHERE id = ? AND is_active = 1').bind(userId).first();
-
-      if (!user) {
-        return new Response(JSON.stringify({ detail: 'User not found' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*' }
-        });
-      }
 
       const providedTotal = body.total_amount !== undefined ? parseNonNegativeNumber(body.total_amount, 'Total amount') : computedTotal;
       if (Math.abs(providedTotal - computedTotal) > 0.0001) {
         return new Response(JSON.stringify({ detail: 'Total amount does not match item total' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*' }
+          headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      const providedChange = body.change_amount !== undefined ? parseNonNegativeNumber(body.change_amount, 'Change amount') : Math.max(cash + qris - computedTotal, 0);
       const expectedChange = Math.max(cash + qris - computedTotal, 0);
+      const providedChange = body.change_amount !== undefined ? parseNonNegativeNumber(body.change_amount, 'Change amount') : expectedChange;
       if (Math.abs(providedChange - expectedChange) > 0.0001) {
         return new Response(JSON.stringify({ detail: 'Change amount does not match payment total' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*' }
+          headers: { 'Content-Type': 'application/json' }
         });
       }
 
       const date = new Date().toISOString().slice(0, 10);
 
-      const txn = await db.exec('BEGIN TRANSACTION');
+      // Insert transaction
+      const txResult = await db.prepare(
+        `INSERT INTO transactions (user_id, total_amount, cash_amount, qris_amount, change_amount, status, notes, date)
+         VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)`
+      ).bind(userId, computedTotal, cash, qris, expectedChange, body.notes || '', date).run();
 
-      try {
-        const txResult = await db.prepare(
-          `INSERT INTO transactions (user_id, total_amount, cash_amount, qris_amount, change_amount, status, notes, date)
-           VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)`
-        ).bind(
-          userId,
-          computedTotal,
-          cash,
-          qris,
-          expectedChange,
-          body.notes || '',
-          date
-        ).run();
+      // Get transaction ID
+      const tx = await db.prepare(
+        'SELECT id FROM transactions WHERE user_id = ? AND date = ? AND total_amount = ? ORDER BY id DESC LIMIT 1'
+      ).bind(userId, date, computedTotal).first();
+      const transactionId = tx?.id;
 
-        const txId = txResult.lastInsertRowid;
-
-        for (const item of normalizedItems) {
-          await db.prepare(
-            `INSERT INTO transaction_items (transaction_id, item_id, quantity, unit_price)
-             VALUES (?, ?, ?, ?)`
-          ).bind(txId, item.item_id, item.quantity, item.price).run();
-        }
-
-        await db.exec('COMMIT');
-
-        return new Response(JSON.stringify({
-          id: txId,
-          total: computedTotal,
-          status: 'completed',
-          created_at: date
-        }), {
-          status: 201,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-          }
-        });
-      } catch (e) {
-        await db.exec('ROLLBACK');
-        console.error('Transaction commit error:', e);
-        return new Response(JSON.stringify({ detail: 'Transaction failed' }), {
+      if (!transactionId) {
+        return new Response(JSON.stringify({ detail: 'Failed to create transaction' }), {
           status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-          }
+          headers: { 'Content-Type': 'application/json' }
         });
       }
+
+      // Insert transaction items
+      for (const item of normalizedItems) {
+        await db.prepare(
+          `INSERT INTO transaction_items (transaction_id, item_id, quantity, unit_price)
+           VALUES (?, ?, ?, ?)`
+        ).bind(transactionId, item.item_id, item.quantity, item.price).run();
+      }
+
+      return new Response(JSON.stringify({
+        id: transactionId,
+        total: computedTotal,
+        status: 'completed',
+        created_at: date
+      }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      });
     } catch (e) {
       console.error('Create transaction error:', e);
-      return new Response(JSON.stringify({ detail: e instanceof Error ? e.message : 'Internal server error' }), {
-        status: 400,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+      return new Response(JSON.stringify({ detail: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
       });
     }
   });
 
-  // GET /api/transactions - list transactions
   router.get('/', async (req: Request, env: any, ctx: Context) => {
     try {
       const auth = await requireAuth(req, env);
@@ -215,10 +194,7 @@ export function transactionsRoutes() {
       }));
 
       return new Response(JSON.stringify(result), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('List transactions error:', e);
@@ -229,7 +205,6 @@ export function transactionsRoutes() {
     }
   });
 
-  // GET /api/transactions/daily - daily summary
   router.get('/daily', async (req: Request, env: any, ctx: Context) => {
     try {
       const auth = await requireAuth(req, env);
@@ -251,7 +226,7 @@ export function transactionsRoutes() {
         `SELECT 
           i.name, i.category, i.price,
           SUM(ti.quantity) as quantity,
-          COALESCE(SUM(ti.quantity * ti.unit_price), 0) as total
+          SUM(ti.quantity * ti.unit_price) as total
          FROM transaction_items ti
          JOIN items i ON ti.item_id = i.id
          JOIN transactions t ON ti.transaction_id = t.id
@@ -275,10 +250,7 @@ export function transactionsRoutes() {
           total: b.total
         }))
       }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('Daily summary error:', e);

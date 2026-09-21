@@ -9,6 +9,7 @@
     "pages": "wrangler pages deploy pages"
   },
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^3.0.0",
+    "jose": "^5.0.0"
   }
 }

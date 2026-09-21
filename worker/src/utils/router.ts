@@ -12,10 +12,26 @@ export class Router {
   }> = [];
 
   private compilePattern(path: string): RegExp {
-    const normalizedPath = path.replace(/\/+/g, '/');
-    const escaped = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const withParams = escaped.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
-    return new RegExp(`^${withParams}$`);
+    // Normalize multiple slashes
+    let normalized = path.replace(/\/+/g, '/');
+    // Escape regex special characters manually
+    let escaped = '';
+    for (let i = 0; i < normalized.length; i++) {
+      const c = normalized[i];
+      if (c === '.' || c === '*' || c === '+' || c === '?' || c === '^' ||
+          c === '$' || c === '{' || c === '}' || c === '(' || c === ')' ||
+          c === '|' || c === '[' || c === ']' || c === '\\') {
+        escaped += '\\' + c;
+      } else {
+        escaped += c;
+      }
+    }
+    // Replace :param with capture group - find : and replace with ([^/]+)
+    // First escape the colon in escaped string
+    const escapedColon = escaped.replace(/:/g, '\\:');
+    // Now replace \: with capture group
+    const withParams = escapedColon.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
+    return new RegExp('^' + withParams + '$');
   }
 
   private extractParams(path: string, match: RegExpMatchArray): Record<string, string> {
@@ -27,14 +43,13 @@ export class Router {
     return params;
   }
 
-  use(prefix: string, routes?: Router) {
+  use(prefix: string, routes?: Router): void {
     if (!routes) return;
-
     const base = prefix.replace(/\/+$/, '');
-
     routes.routes.forEach(r => {
-      const routePath = r.path.startsWith('/') ? r.path : `/${r.path}`;
-      const fullPath = `${base}${routePath}` || '/';
+      let routePath = r.path;
+      if (routePath === '/') routePath = '';
+      const fullPath = routePath ? base + '/' + routePath : base;
       this.routes.push({
         method: r.method,
         path: fullPath,
@@ -44,19 +59,19 @@ export class Router {
     });
   }
 
-  get(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
+  get(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response): void {
     this.routes.push({ method: 'GET', path, pattern: this.compilePattern(path), handler });
   }
 
-  post(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
+  post(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response): void {
     this.routes.push({ method: 'POST', path, pattern: this.compilePattern(path), handler });
   }
 
-  patch(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
+  patch(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response): void {
     this.routes.push({ method: 'PATCH', path, pattern: this.compilePattern(path), handler });
   }
 
-  delete(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
+  delete(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response): void {
     this.routes.push({ method: 'DELETE', path, pattern: this.compilePattern(path), handler });
   }
 

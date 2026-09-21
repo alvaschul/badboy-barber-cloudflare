@@ -6,7 +6,7 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "badboy-barber-db"
-database_id = "${D1_DATABASE_ID}"
+database_id = "befc1249-c276-4d28-9dd8-1b393e8931d0"
 
 [vars]
 # Set via Wrangler CLI or dashboard:

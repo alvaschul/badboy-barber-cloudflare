@@ -16,33 +16,34 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Initialize DB tables on first request (idempotent)
     await initDb(env.DB);
-    
+
     const url = new URL(request.url);
     const router = new Router();
-    
+    const allowedOrigin = env.ALLOWED_ORIGINS || '*';
+
     // Register routes
     router.use('/api/auth', authRoutes());
     router.use('/api/items', itemsRoutes());
     router.use('/api/transactions', transactionsRoutes());
     router.use('/api/reports', reportsRoutes());
     router.use('/api/db', dbadminRoutes());
-    
+
     // Health check
     router.get('/api/health', () => new Response(JSON.stringify({ status: 'ok', version: '1.0.0' }), {
       headers: { 'Content-Type': 'application/json' }
     }));
-    
+
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS,
+          'Access-Control-Allow-Origin': allowedOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         }
       });
     }
-    
+
     return router.handle(request, env, ctx);
   }
 };

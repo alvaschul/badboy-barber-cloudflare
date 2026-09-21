@@ -55,6 +55,56 @@ export function authRoutes() {
     }
   });
 
+  // POST /api/auth/admin-login
+  router.post('/admin-login', async (req: Request, env: any, ctx: Context) => {
+    try {
+      const body = await req.json() as { username?: string; pin?: string };
+      const username = body.username?.trim();
+      const pin = body.pin;
+
+      if (!username || !pin || pin.trim().length === 0) {
+        return new Response(JSON.stringify({ detail: 'Admin username and PIN required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const user = await env.DB.prepare(
+        'SELECT id, username, pin_hash, role FROM users WHERE username = ? AND is_active = 1'
+      ).bind(username).first();
+
+      if (!user || user.role !== 'admin' || !(await verifyPin(pin, user.pin_hash))) {
+        return new Response(JSON.stringify({ detail: 'Admin access denied' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = await createToken({
+        sub: user.username,
+        user_id: user.id,
+        role: user.role
+      });
+
+      return new Response(JSON.stringify({
+        access_token: token,
+        token_type: 'bearer',
+        user: { id: user.id, username: user.username, role: user.role }
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
+        }
+      });
+    } catch (e) {
+      console.error('Admin login error:', e);
+      return new Response(JSON.stringify({ detail: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  });
+
   // POST /api/auth/refresh
   router.post('/refresh', async (req: Request, env: any, ctx: Context) => {
     try {

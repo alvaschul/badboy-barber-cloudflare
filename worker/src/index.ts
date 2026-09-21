@@ -4,6 +4,7 @@ import { authRoutes } from './routes/auth';
 import { itemsRoutes } from './routes/items';
 import { transactionsRoutes } from './routes/transactions';
 import { reportsRoutes } from './routes/reports';
+import { branchesRoutes } from './routes/branches';
 import { dbadminRoutes } from './routes/dbadmin';
 
 export interface Env {
@@ -25,6 +26,7 @@ export default {
     router.use('/api/items', itemsRoutes());
     router.use('/api/transactions', transactionsRoutes());
     router.use('/api/reports', reportsRoutes());
+    router.use('/api/cabang', branchesRoutes());
     router.use('/api/db', dbadminRoutes());
     
     // Health check

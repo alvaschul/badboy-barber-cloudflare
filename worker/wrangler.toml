@@ -1,0 +1,13 @@
+name = "badboy-barber-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "badboy-barber-db"
+database_id = "${D1_DATABASE_ID}"
+
+[vars]
+SECRET_KEY = "${SECRET_KEY}"
+ALLOWED_ORIGINS = "*"

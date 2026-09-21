@@ -1,0 +1,14 @@
+{
+  "name": "badboy-barber-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "pages": "wrangler pages deploy pages"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

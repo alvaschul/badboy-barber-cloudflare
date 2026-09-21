@@ -3,43 +3,45 @@ import { createToken, verifyPin, verifyToken } from '../utils/jwt';
 
 export function authRoutes() {
   const router = new Router();
-  
+
   // POST /api/auth/login
   router.post('/login', async (req: Request, env: any, ctx: Context) => {
     try {
-      const body = await req.json() as { username: string; pin: string };
-      
-      if (!body.username || !body.pin) {
+      const body = await req.json() as { username?: string; pin?: string };
+      const username = body.username?.trim();
+      const pin = body.pin;
+
+      if (!username || !pin || pin.trim().length === 0) {
         return new Response(JSON.stringify({ detail: 'Username and PIN required' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const db = env.DB;
       const user = await db.prepare(
         'SELECT id, username, pin_hash, role FROM users WHERE username = ? AND is_active = 1'
-      ).bind(body.username).first();
-      
-      if (!user || !(await verifyPin(body.pin, user.pin_hash))) {
+      ).bind(username).first();
+
+      if (!user || !(await verifyPin(pin, user.pin_hash))) {
         return new Response(JSON.stringify({ detail: 'Invalid credentials' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const token = await createToken({
         sub: user.username,
         user_id: user.id,
         role: user.role
       });
-      
+
       return new Response(JSON.stringify({
         access_token: token,
         token_type: 'bearer',
         user: { id: user.id, username: user.username, role: user.role }
       }), {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
         }
@@ -52,43 +54,52 @@ export function authRoutes() {
       });
     }
   });
-  
+
   // POST /api/auth/refresh
   router.post('/refresh', async (req: Request, env: any, ctx: Context) => {
     try {
-      const body = await req.json() as { access_token: string };
-      const payload = await verifyToken(body.access_token);
-      
+      const body = await req.json() as { access_token?: string };
+      const accessToken = body.access_token?.trim();
+
+      if (!accessToken) {
+        return new Response(JSON.stringify({ detail: 'Access token required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const payload = await verifyToken(accessToken);
+
       if (!payload || !payload.user_id) {
         return new Response(JSON.stringify({ detail: 'Invalid token' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const user = await env.DB.prepare(
         'SELECT id, username, role FROM users WHERE id = ? AND is_active = 1'
       ).bind(payload.user_id).first();
-      
+
       if (!user) {
         return new Response(JSON.stringify({ detail: 'User not found' }), {
           status: 401,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const token = await createToken({
         sub: user.username,
         user_id: user.id,
         role: user.role
       });
-      
+
       return new Response(JSON.stringify({
         access_token: token,
         token_type: 'bearer',
         user: { id: user.id, username: user.username, role: user.role }
       }), {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
         }
@@ -101,7 +112,7 @@ export function authRoutes() {
       });
     }
   });
-  
+
   // GET /api/auth/me
   router.get('/me', async (req: Request, env: any, ctx: Context) => {
     try {
@@ -112,7 +123,7 @@ export function authRoutes() {
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const payload = await verifyToken(authHeader.slice(7));
       if (!payload || !payload.user_id) {
         return new Response(JSON.stringify({ detail: 'Invalid token' }), {
@@ -120,20 +131,20 @@ export function authRoutes() {
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       const user = await env.DB.prepare(
-        'SELECT id, username, role FROM users WHERE id = ?'
+        'SELECT id, username, role FROM users WHERE id = ? AND is_active = 1'
       ).bind(payload.user_id).first();
-      
+
       if (!user) {
         return new Response(JSON.stringify({ detail: 'User not found' }), {
           status: 404,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       return new Response(JSON.stringify({ id: user.id, username: user.username, role: user.role }), {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
         }
@@ -146,13 +157,13 @@ export function authRoutes() {
       });
     }
   });
-  
+
   // POST /api/auth/logout (client-side logout, just return success)
   router.post('/logout', async () => {
     return new Response(JSON.stringify({ message: 'Logged out' }), {
       headers: { 'Content-Type': 'application/json' }
     });
   });
-  
+
   return router;
 }

@@ -24,7 +24,17 @@ export default {
 
     const url = new URL(request.url);
     const router = new Router();
-    const allowedOrigin = env.ALLOWED_ORIGINS || '*';
+    
+    // Get origin from request - for CORS we echo back the request origin
+    // This allows any Pages URL (with hash or without) to work
+    const requestOrigin = request.headers.get('Origin');
+    let allowedOrigin = env.ALLOWED_ORIGINS || '*';
+    
+    // If request has Origin header, use it for CORS (allows Pages preview URLs)
+    if (requestOrigin) {
+      // Allow the request origin (works for any Pages URL)
+      allowedOrigin = requestOrigin;
+    }
 
     router.use('/api/auth', authRoutes());
     router.use('/api/items', itemsRoutes());
@@ -43,6 +53,7 @@ export default {
           'Access-Control-Allow-Origin': allowedOrigin,
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
         }
       });
     }

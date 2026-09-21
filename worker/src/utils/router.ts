@@ -6,32 +6,58 @@ export interface Context {
 export class Router {
   private routes: Array<{
     method: string;
+    path: string;
     pattern: RegExp;
     handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response;
   }> = [];
 
-  use(_prefix: string, routes?: Router) {
-    if (routes) {
-      routes.routes.forEach(r => {
-        this.routes.push(r);
+  private compilePattern(path: string): RegExp {
+    const normalizedPath = path.replace(/\/+/g, '/');
+    const escaped = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const withParams = escaped.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
+    return new RegExp(`^${withParams}$`);
+  }
+
+  private extractParams(path: string, match: RegExpMatchArray): Record<string, string> {
+    const params: Record<string, string> = {};
+    const names = Array.from(path.matchAll(/:([A-Za-z0-9_]+)/g), m => m[1]);
+    names.forEach((name, index) => {
+      params[name] = match[index + 1] ?? '';
+    });
+    return params;
+  }
+
+  use(prefix: string, routes?: Router) {
+    if (!routes) return;
+
+    const base = prefix.replace(/\/+$/, '');
+
+    routes.routes.forEach(r => {
+      const routePath = r.path.startsWith('/') ? r.path : `/${r.path}`;
+      const fullPath = `${base}${routePath}` || '/';
+      this.routes.push({
+        method: r.method,
+        path: fullPath,
+        pattern: this.compilePattern(fullPath),
+        handler: r.handler
       });
-    }
+    });
   }
 
   get(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
-    this.routes.push({ method: 'GET', pattern: new RegExp(`^${path}$`), handler });
+    this.routes.push({ method: 'GET', path, pattern: this.compilePattern(path), handler });
   }
 
   post(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
-    this.routes.push({ method: 'POST', pattern: new RegExp(`^${path}$`), handler });
+    this.routes.push({ method: 'POST', path, pattern: this.compilePattern(path), handler });
   }
 
   patch(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
-    this.routes.push({ method: 'PATCH', pattern: new RegExp(`^${path}$`), handler });
+    this.routes.push({ method: 'PATCH', path, pattern: this.compilePattern(path), handler });
   }
 
   delete(path: string, handler: (req: Request, env: any, ctx: Context) => Promise<Response> | Response) {
-    this.routes.push({ method: 'DELETE', pattern: new RegExp(`^${path}$`), handler });
+    this.routes.push({ method: 'DELETE', path, pattern: this.compilePattern(path), handler });
   }
 
   async handle(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
@@ -42,12 +68,7 @@ export class Router {
     for (const route of this.routes) {
       const match = path.match(route.pattern);
       if (match && method === route.method) {
-        const params: Record<string, string> = {};
-        const regex = /:([^\/]+)/g;
-        let match2;
-        while ((match2 = regex.exec(route.pattern.source)) !== null) {
-          params[match2[1]] = match[parseInt(match2[1]) + 1] || '';
-        }
+        const params = this.extractParams(route.path, match);
         try {
           return await route.handler(request, env, { params, env });
         } catch (e) {

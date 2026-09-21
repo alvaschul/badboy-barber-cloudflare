@@ -22,6 +22,28 @@ const EDIT_COLUMNS: Record<string, string[]> = {
   users: ['username', 'role', 'is_active']
 };
 
+function sanitizeAdminQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    throw new Error('Query is empty');
+  }
+
+  if (/[;\-\-]|\/\*|\*\//.test(trimmed)) {
+    throw new Error('Query contains forbidden characters');
+  }
+
+  const upper = trimmed.toUpperCase();
+  if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) {
+    throw new Error('Only SELECT / WITH queries allowed');
+  }
+
+  if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|GRANT|REVOKE|ATTACH|DETACH|PRAGMA)\b/i.test(trimmed)) {
+    throw new Error('Only read-only queries are allowed');
+  }
+
+  return trimmed.replace(/;\s*$/, '');
+}
+
 export function dbadminRoutes() {
   const router = new Router();
   
@@ -109,23 +131,9 @@ export function dbadminRoutes() {
     if (auth.error) return auth.response;
     
     const body = await req.json() as { query: string };
-    let query = body.query.trim().replace(/;$/, '');
-    
-    if (!query) {
-      return new Response(JSON.stringify({ detail: 'Query is empty' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    if (!query.toUpperCase().startsWith('SELECT') && !query.toUpperCase().startsWith('WITH')) {
-      return new Response(JSON.stringify({ detail: 'Only SELECT / WITH queries allowed' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
+
     try {
+      const query = sanitizeAdminQuery(body.query);
       const result = await env.DB.prepare(query).all();
       return new Response(JSON.stringify({
         columns: result.columns,

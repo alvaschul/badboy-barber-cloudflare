@@ -1,15 +1,44 @@
 import { Router } from '../utils/router';
+import { verifyToken } from '../utils/jwt';
+
+async function requireAuth(req: Request, env: any): Promise<{ ok: boolean; response?: Response; payload?: any }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ detail: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
+  const payload = await verifyToken(authHeader.slice(7));
+  if (!payload || !payload.user_id) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ detail: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
+  return { ok: true, payload };
+}
 
 export function reportsRoutes() {
   const router = new Router();
-  
+
   // GET /api/reports/daily-summary
   router.get('/daily-summary', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const url = new URL(req.url);
       const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
-      
-      // Get summary
+
       const summary = await env.DB.prepare(
         `SELECT 
           COUNT(*) as total_transactions,
@@ -19,13 +48,12 @@ export function reportsRoutes() {
           COALESCE(SUM(change_amount), 0) as total_change
          FROM transactions WHERE date = ?`
       ).bind(date).first();
-      
-      // Get item breakdown
+
       const breakdown = await env.DB.prepare(
         `SELECT 
           i.id, i.name, i.category, i.price,
           SUM(ti.quantity) as quantity,
-          SUM(ti.quantity * ti.unit_price) as total
+          COALESCE(SUM(ti.quantity * ti.unit_price), 0) as total
          FROM transaction_items ti
          JOIN items i ON ti.item_id = i.id
          JOIN transactions t ON ti.transaction_id = t.id
@@ -33,19 +61,17 @@ export function reportsRoutes() {
          GROUP BY i.id
          ORDER BY i.id`
       ).bind(date).all();
-      
-      // Get transactions
+
       const txns = await env.DB.prepare(
         `SELECT id, total_amount, cash_amount, qris_amount, change_amount, notes, date
          FROM transactions WHERE date = ? ORDER BY id`
       ).bind(date).all();
-      
-      // Calculate totals
-      const totalSales = breakdown.results.reduce((s: number, b: any) => s + (b.quantity || 0), 0);
+
+      const totalSales = breakdown.results.reduce((s: number, b: any) => s + (Number(b.quantity) || 0), 0);
       const totalProducts = breakdown.results
         .filter((b: any) => b.category === 'product')
-        .reduce((s: number, b: any) => s + (b.price * b.quantity), 0);
-      
+        .reduce((s: number, b: any) => s + (Number(b.total) || 0), 0);
+
       return new Response(JSON.stringify({
         date,
         summary: {
@@ -74,7 +100,7 @@ export function reportsRoutes() {
           created_at: t.date
         }))
       }), {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
         }
@@ -87,42 +113,43 @@ export function reportsRoutes() {
       });
     }
   });
-  
+
   // GET /api/reports/daily-detail
   router.get('/daily-detail', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const url = new URL(req.url);
       const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
-      
+
       const summary = await env.DB.prepare(
         `SELECT 
           COUNT(*) as total_transactions,
           COALESCE(SUM(total_amount), 0) as total_revenue
          FROM transactions WHERE date = ?`
       ).bind(date).first();
-      
+
       const breakdown = await env.DB.prepare(
         `SELECT i.id, i.name, i.category, i.price,
                 SUM(ti.quantity) as quantity,
-                SUM(ti.quantity * ti.unit_price) as total
+                COALESCE(SUM(ti.quantity * ti.unit_price), 0) as total
          FROM transaction_items ti
          JOIN items i ON ti.item_id = i.id
          JOIN transactions t ON ti.transaction_id = t.id
          WHERE t.date = ?
          GROUP BY i.id`
       ).bind(date).all();
-      
-      // Get active non-admin users
+
       const users = await env.DB.prepare(
-        'SELECT id, username, role FROM users WHERE is_active = 1 AND role != ? ORDER BY id',
-        ['admin']
-      ).all();
-      
+        'SELECT id, username, role FROM users WHERE is_active = 1 AND role != ? ORDER BY id'
+      ).bind('admin').all();
+
       const txns = await env.DB.prepare(
         `SELECT id, total_amount, cash_amount, qris_amount, change_amount, notes, date
          FROM transactions WHERE date = ? ORDER BY id`
       ).bind(date).all();
-      
+
       return new Response(JSON.stringify({
         date,
         summary: {
@@ -154,7 +181,7 @@ export function reportsRoutes() {
         })),
         staff_pay: 'UM (Uang Makan)'
       }), {
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
         }
@@ -167,24 +194,27 @@ export function reportsRoutes() {
       });
     }
   });
-  
+
   // GET /api/reports/csv
   router.get('/csv', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const url = new URL(req.url);
       const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
-      
+
       const txns = await env.DB.prepare(
         `SELECT id, date, total_amount, cash_amount, qris_amount, change_amount, notes
          FROM transactions WHERE date = ? ORDER BY id`
       ).bind(date).all();
-      
+
       let csv = 'ID,Date,Total,Cash,QRIS,Change,Notes\n';
       for (const t of txns.results) {
         const notes = (t.notes || '').replace(/"/g, '""');
         csv += `${t.id},${t.date},${t.total_amount},${t.cash_amount},${t.qris_amount},${t.change_amount},"${notes}"\n`;
       }
-      
+
       return new Response(csv, {
         headers: {
           'Content-Type': 'text/csv',
@@ -200,6 +230,6 @@ export function reportsRoutes() {
       });
     }
   });
-  
+
   return router;
 }

@@ -15,21 +15,23 @@ export class Router {
     // Normalize multiple slashes
     let s = path;
     while (s.includes('//')) s = s.replace('//', '/');
-    // Escape regex special characters
+    
+    // Replace :param with capture group FIRST
+    let withParams = s.replace(/:([A-Za-z0-9_]+)/g, '([^/]+)');
+    
+    // Escape only the truly dangerous regex characters
+    // NOT: ( ) [ ] ^ + - (these are standard regex syntax we might use)
     let escaped = '';
-    for (let i = 0; i < s.length; i++) {
-      const c = s[i];
-      if (c === '.' || c === '*' || c === '+' || c === '?' || c === '^' ||
-          c === '$' || c === '{' || c === '}' || c === '(' || c === ')' ||
-          c === '|' || c === '[' || c === ']' || c === '\\') {
+    for (let i = 0; i < withParams.length; i++) {
+      const c = withParams[i];
+      if (c === '.' || c === '*' || c === '?' || c === '|' || c === '\\') {
         escaped += '\\' + c;
       } else {
         escaped += c;
       }
     }
-    // Replace :paramName with capture group
-    const withParams = escaped.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
-    return new RegExp('^' + withParams + '$');
+    
+    return new RegExp('^' + escaped + '$');
   }
 
   private extractParams(path: string, match: RegExpMatchArray): Record<string, string> {
@@ -43,7 +45,6 @@ export class Router {
 
   use(prefix: string, routes?: Router): void {
     if (!routes) return;
-    // Remove trailing slashes without regex
     let base = prefix;
     while (base.endsWith('/')) base = base.slice(0, -1);
     routes.routes.forEach(r => {

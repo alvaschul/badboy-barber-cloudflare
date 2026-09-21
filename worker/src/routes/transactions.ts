@@ -1,4 +1,5 @@
 import { Router } from '../utils/router';
+import { verifyToken } from '../utils/jwt';
 
 function parsePositiveInteger(value: unknown, label: string): number {
   const parsed = Number(value);
@@ -16,12 +17,41 @@ function parseNonNegativeNumber(value: unknown, label: string): number {
   return parsed;
 }
 
+async function requireAuth(req: Request, env: any): Promise<{ ok: boolean; response?: Response; payload?: any }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ detail: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
+  const payload = await verifyToken(authHeader.slice(7));
+  if (!payload || !payload.user_id) {
+    return {
+      ok: false,
+      response: new Response(JSON.stringify({ detail: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
+  return { ok: true, payload };
+}
+
 export function transactionsRoutes() {
   const router = new Router();
 
   // POST /api/transactions - create transaction
   router.post('/', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const body = await req.json() as {
         items?: Array<{ item_id?: number | string; quantity?: number | string; price?: number | string }>;
         cash_amount?: number | string;
@@ -58,9 +88,8 @@ export function transactionsRoutes() {
         }
 
         const unitPrice = parseNonNegativeNumber(itemRecord.price, 'Item price');
-        const price = unitPrice;
-        normalizedItems.push({ item_id: itemId, quantity, price });
-        computedTotal += price * quantity;
+        normalizedItems.push({ item_id: itemId, quantity, price: unitPrice });
+        computedTotal += unitPrice * quantity;
       }
 
       const cash = parseNonNegativeNumber(body.cash_amount ?? 0, 'Cash amount');
@@ -94,11 +123,9 @@ export function transactionsRoutes() {
 
       const date = new Date().toISOString().slice(0, 10);
 
-      // Begin transaction
       const txn = await db.exec('BEGIN TRANSACTION');
 
       try {
-        // Insert transaction
         const txResult = await db.prepare(
           `INSERT INTO transactions (user_id, total_amount, cash_amount, qris_amount, change_amount, status, notes, date)
            VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)`
@@ -114,7 +141,6 @@ export function transactionsRoutes() {
 
         const txId = txResult.lastInsertRowid;
 
-        // Insert transaction items
         for (const item of normalizedItems) {
           await db.prepare(
             `INSERT INTO transaction_items (transaction_id, item_id, quantity, unit_price)
@@ -162,6 +188,9 @@ export function transactionsRoutes() {
   // GET /api/transactions - list transactions
   router.get('/', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const url = new URL(req.url);
       const date = url.searchParams.get('date');
 
@@ -203,6 +232,9 @@ export function transactionsRoutes() {
   // GET /api/transactions/daily - daily summary
   router.get('/daily', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const url = new URL(req.url);
       const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
 
@@ -215,12 +247,11 @@ export function transactionsRoutes() {
          FROM transactions WHERE date = ?`
       ).bind(date).first();
 
-      // Item breakdown
       const breakdown = await env.DB.prepare(
         `SELECT 
           i.name, i.category, i.price,
           SUM(ti.quantity) as quantity,
-          SUM(ti.quantity * ti.unit_price) as total
+          COALESCE(SUM(ti.quantity * ti.unit_price), 0) as total
          FROM transaction_items ti
          JOIN items i ON ti.item_id = i.id
          JOIN transactions t ON ti.transaction_id = t.id

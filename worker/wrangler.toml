@@ -9,5 +9,7 @@ database_name = "badboy-barber-db"
 database_id = "${D1_DATABASE_ID}"
 
 [vars]
-SECRET_KEY = "${SECRET_KEY}"
-ALLOWED_ORIGINS = "*"
+# Set via Wrangler CLI or dashboard:
+# npx wrangler secret put SECRET_KEY
+# npx wrangler secret put ALLOWED_ORIGINS
+ALLOWED_ORIGINS = "https://your-domain.example.com"

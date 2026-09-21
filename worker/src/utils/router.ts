@@ -12,7 +12,8 @@ export class Router {
   }> = [];
 
   private compilePattern(path: string): RegExp {
-    const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const normalizedPath = path.replace(/\/+/g, '/');
+    const escaped = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const withParams = escaped.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
     return new RegExp(`^${withParams}$`);
   }
@@ -29,8 +30,11 @@ export class Router {
   use(prefix: string, routes?: Router) {
     if (!routes) return;
 
+    const base = prefix.replace(/\/+$/, '');
+
     routes.routes.forEach(r => {
-      const fullPath = `${prefix}${r.path}`;
+      const routePath = r.path.startsWith('/') ? r.path : `/${r.path}`;
+      const fullPath = `${base}${routePath}` || '/';
       this.routes.push({
         method: r.method,
         path: fullPath,

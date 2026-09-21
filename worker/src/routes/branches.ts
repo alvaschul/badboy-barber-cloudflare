@@ -46,11 +46,15 @@ export function branchesRoutes() {
         });
       }
       
-      const result = await env.DB.prepare(
-        'INSERT INTO branches (name) VALUES (?)'
-      ).bind(body.name.trim()).run();
+      const name = body.name.trim();
+      await env.DB.prepare('INSERT INTO branches (name) VALUES (?)').bind(name).run();
       
-      return new Response(JSON.stringify({ id: result.lastInsertRowid }), {
+      // Get the ID of the newly created branch
+      const newBranch = await env.DB.prepare(
+        'SELECT id FROM branches WHERE name = ? ORDER BY id DESC LIMIT 1'
+      ).bind(name).first();
+      
+      return new Response(JSON.stringify({ id: newBranch?.id }), {
         status: 201,
         headers: { 
           'Content-Type': 'application/json',
@@ -71,7 +75,6 @@ export function branchesRoutes() {
     try {
       const id = parseInt(ctx.params.id);
       
-      // Check if branch has items
       const used = await env.DB.prepare(
         'SELECT COUNT(*) as cnt FROM items WHERE branch_id = ?'
       ).bind(id).first();

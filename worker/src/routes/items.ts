@@ -1,5 +1,18 @@
 import { Router } from '../utils/router';
 
+function normalizeBranchId(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error('Invalid branch id');
+  }
+
+  return parsed;
+}
+
 export function itemsRoutes() {
   const router = new Router();
   
@@ -10,6 +23,7 @@ export function itemsRoutes() {
       const all = url.searchParams.get('all') === 'true';
       const active = url.searchParams.get('active') === 'true';
       const cabang = url.searchParams.get('cabang');
+      const cabangId = cabang === null || cabang === '' ? null : Number(cabang);
       
       let query = 'SELECT id, name, price, category, branch_id, is_active, is_hidden, created_at FROM items';
       const conditions: string[] = [];
@@ -21,9 +35,9 @@ export function itemsRoutes() {
       if (active !== null) {
         conditions.push('is_hidden = 0');
       }
-      if (cabang) {
+      if (cabangId !== null && Number.isInteger(cabangId) && cabangId >= 1) {
         conditions.push('branch_id = ?');
-        params.push(parseInt(cabang));
+        params.push(cabangId);
       }
       
       if (conditions.length > 0) {
@@ -66,7 +80,7 @@ export function itemsRoutes() {
         name: string;
         price: number;
         category?: string;
-        cabang_id?: number | string;
+        cabang_id?: number | string | null;
       };
       
       if (!body.name || body.name.trim().length < 2) {
@@ -83,8 +97,15 @@ export function itemsRoutes() {
         });
       }
       
-      const branchId = body.cabang_id ? parseInt(body.cabang_id as any) : null;
-      if (branchId) {
+      const branchId = body.cabang_id === undefined ? null : normalizeBranchId(body.cabang_id);
+      if (body.cabang_id !== undefined && body.cabang_id !== null && body.cabang_id !== '' && branchId === null) {
+        return new Response(JSON.stringify({ detail: 'Invalid cabang_id' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (branchId !== null) {
         const branch = await env.DB.prepare('SELECT id FROM branches WHERE id = ?').bind(branchId).first();
         if (!branch) {
           return new Response(JSON.stringify({ detail: 'Branch not found' }), {
@@ -101,7 +122,7 @@ export function itemsRoutes() {
         body.name.trim(),
         body.price,
         body.category || 'service',
-        branchId || null
+        branchId
       ).run();
       
       const newItem = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(result.lastInsertRowid).first();
@@ -139,7 +160,7 @@ export function itemsRoutes() {
         price?: number;
         category?: string;
         hidden?: boolean;
-        cabang_id?: number | string;
+        cabang_id?: number | string | null;
       };
       
       const existing = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
@@ -170,8 +191,29 @@ export function itemsRoutes() {
         params.push(body.hidden ? 1 : 0);
       }
       if (body.cabang_id !== undefined) {
+        const normalizedBranchId = body.cabang_id === null || body.cabang_id === ''
+          ? null
+          : normalizeBranchId(body.cabang_id);
+
+        if (body.cabang_id !== null && body.cabang_id !== '' && normalizedBranchId === null) {
+          return new Response(JSON.stringify({ detail: 'Invalid cabang_id' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (normalizedBranchId !== null) {
+          const branch = await env.DB.prepare('SELECT id FROM branches WHERE id = ?').bind(normalizedBranchId).first();
+          if (!branch) {
+            return new Response(JSON.stringify({ detail: 'Branch not found' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        }
+
         updates.push('branch_id = ?');
-        params.push(parseInt(body.cabang_id as any));
+        params.push(normalizedBranchId);
       }
       
       if (updates.length === 0) {

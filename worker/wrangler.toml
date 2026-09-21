@@ -12,4 +12,4 @@ database_id = "befc1249-c276-4d28-9dd8-1b393e8931d0"
 # Set via Wrangler CLI or dashboard:
 # npx wrangler secret put SECRET_KEY
 # npx wrangler secret put ALLOWED_ORIGINS
-ALLOWED_ORIGINS = "https://your-domain.example.com"
+ALLOWED_ORIGINS = "https://2f2910fa.badboy-barber-pos.pages.dev"

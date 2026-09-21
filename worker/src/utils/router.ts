@@ -13,11 +13,12 @@ export class Router {
 
   private compilePattern(path: string): RegExp {
     // Normalize multiple slashes
-    let normalized = path.replace(/\/+/g, '/');
-    // Escape regex special characters manually
+    let s = path;
+    while (s.includes('//')) s = s.replace('//', '/');
+    // Escape regex special characters
     let escaped = '';
-    for (let i = 0; i < normalized.length; i++) {
-      const c = normalized[i];
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
       if (c === '.' || c === '*' || c === '+' || c === '?' || c === '^' ||
           c === '$' || c === '{' || c === '}' || c === '(' || c === ')' ||
           c === '|' || c === '[' || c === ']' || c === '\\') {
@@ -26,11 +27,8 @@ export class Router {
         escaped += c;
       }
     }
-    // Replace :param with capture group - find : and replace with ([^/]+)
-    // First escape the colon in escaped string
-    const escapedColon = escaped.replace(/:/g, '\\:');
-    // Now replace \: with capture group
-    const withParams = escapedColon.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
+    // Replace :paramName with capture group
+    const withParams = escaped.replace(/\\:([A-Za-z0-9_]+)/g, '([^/]+)');
     return new RegExp('^' + withParams + '$');
   }
 
@@ -45,7 +43,9 @@ export class Router {
 
   use(prefix: string, routes?: Router): void {
     if (!routes) return;
-    const base = prefix.replace(/\/+$/, '');
+    // Remove trailing slashes without regex
+    let base = prefix;
+    while (base.endsWith('/')) base = base.slice(0, -1);
     routes.routes.forEach(r => {
       let routePath = r.path;
       if (routePath === '/') routePath = '';

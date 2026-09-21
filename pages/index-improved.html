@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Badboy Barber — POS & Daily Reports</title>
+    <style>
+      :root {
+        --bg: #07110d;
+        --panel: #0d1714;
+        --panel-strong: #0f1d1a;
+        --card: rgba(17, 29, 26, 0.9);
+        --card-soft: rgba(21, 33, 30, 0.82);
+        --border: rgba(150, 211, 195, 0.18);
+        --border-strong: rgba(150, 211, 195, 0.28);
+        --text: #edfdf6;
+        --muted: #a9c9be;
+        --dim: #7da79a;
+        --accent: #35d39b;
+        --accent-strong: #14b77a;
+        --accent-soft: rgba(53, 211, 155, 0.14);
+        --warn: #ff6b6b;
+        --warn-soft: rgba(255, 107, 107, 0.12);
+        --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+        --radius: 18px;
+        --radius-sm: 12px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(circle at top, rgba(53, 211, 155, 0.08), transparent 35%), var(--bg);
+        color: var(--text);
+        font-family: Inter, "Segoe UI", sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+      }
+
+      button, input, select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .app-shell {
+        min-height: 100vh;
+      }
+
+      .login-screen {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      .login-card {
+        width: min(440px, 100%);
+        background: linear-gradient(180deg, rgba(18, 29, 26, 0.96), rgba(10, 18, 16, 0.94));
+        border: 1px solid var(--border);
+        border-radius: 26px;
+        box-shadow: var(--shadow);
+        padding: 28px 24px;
+      }
+
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .brand-mark {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        background: linear-gradient(135deg, var(--accent-soft), rgba(53, 211, 155, 0.04));
+        color: var(--accent);
+        border: 1px solid var(--border-strong);
+      }
+
+      .brand-mark svg {
+        width: 25px;
+        height: 25px;
+      }
+
+      .brand-name {
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-sub {
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .headline {
+        font-size: clamp(1.8rem, 4vw, 2.5rem);
+        line-height: 1.1;
+        margin: 0 0 8px;
+        letter-spacing: -0.05em;
+      }
+
+      .subtext {
+        color: var(--muted);
+        margin: 0 0 20px;
+        font-size: 0.96rem;
+      }
+
+      .field {
+        margin-bottom: 16px;
+      }
+
+      .field label {
+        display: block;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--dim);
+        margin-bottom: 8px;
+      }
+
+      .field input {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(8, 14, 12, 0.9);
+        color: var(--text);
+        padding: 14px 15px;
+        outline: none;
+        transition: 0.2s ease;
+      }
+
+      .field input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px rgba(53, 211, 155, 0.12);
+      }
+
+      .field-error {
+        min-height: 18px;
+        font-size: 0.72rem;
+        color: var(--warn);
+        margin-top: 6px;
+      }
+
+      .btn {
+        border: 0;
+        border-radius: 12px;
+        padding: 14px 18px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        transition: 0.18s ease;
+      }
+
+      .btn:hover { transform: translateY(-1px); }
+      .btn:active { transform: translateY(0); }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: #062a1e;
+        box-shadow: 0 14px 30px rgba(53, 211, 155, 0.25);
+      }
+
+      .btn-primary[disabled] {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .login-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .login-actions .btn {
+        flex: 1;
+      }
+
+      .form-note {
+        margin-top: 16px;
+        font-size: 0.76rem;
+        color: var(--dim);
+        text-align: center;
+      }
+
+      .main-screen {
+        display: none;
+        min-height: 100vh;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 22px;
+        background: rgba(10, 18, 16, 0.78);
+        border-bottom: 1px solid var(--border);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+      }
+
+      .nav button {
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 600;
+      }
+
+      .nav button.active {
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: #041d17;
+      }
+
+      .content {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 22px 18px 60px;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .panel + .panel {
+        margin-top: 18px;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .panel-title {
+        margin: 0;
+        font-size: 1.05rem;
+        letter-spacing: -0.03em;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      .stat {
+        background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 16px;
+      }
+
+      .stat-label {
+        color: var(--dim);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .stat-value {
+        font-size: clamp(1.5rem, 2vw, 2.1rem);
+        font-weight: 800;
+        margin-top: 8px;
+        letter-spacing: -0.05em;
+      }
+
+      .cart-layout {
+        display: grid;
+        grid-template-columns: 1.4fr 0.9fr;
+        gap: 18px;
+      }
+
+      .item-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 12px;
+      }
+
+      .item-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.015);
+        padding: 14px 12px;
+        text-align: center;
+        color: var(--text);
+        min-height: 132px;
+        transition: 0.2s ease;
+      }
+
+      .item-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--border-strong);
+      }
+
+      .item-card.selected {
+        background: rgba(53, 211, 155, 0.08);
+        border-color: var(--accent);
+      }
+
+      .item-icon {
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 8px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: rgba(255,255,255,0.02);
+        color: var(--accent);
+      }
+
+      .item-name {
+        font-weight: 700;
+        font-size: 0.92rem;
+      }
+
+      .item-price {
+        color: var(--muted);
+        margin-top: 6px;
+        font-size: 0.8rem;
+      }
+
+      .cart-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .cart-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .qty-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .qty-box button {
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text);
+      }
+
+      .total-box {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 18px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        font-weight: 700;
+      }
+
+      .table-wrap {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th, td {
+        text-align: left;
+        padding: 12px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        font-size: 0.7rem;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(53, 211, 155, 0.12);
+        color: var(--accent);
+        font-size: 0.7rem;
+        border: 1px solid rgba(53, 211, 155, 0.25);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 0.78rem;
+      }
+
+      .toast {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        background: rgba(10, 18, 16, 0.96);
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: var(--shadow);
+        opacity: 0;
+        transform: translateY(12px);
+        pointer-events: none;
+        transition: 0.2s ease;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 760px) {
+        .cart-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .nav {
+          width: 100%;
+          overflow-x: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <section id="loginScreen" class="login-screen">
+        <div class="login-card" aria-labelledby="loginTitle">
+          <div class="brand-row">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2.5v5M8 8h8M6 12a6 6 0 1 0 12 0M12 18v3" />
+              </svg>
+            </div>
+            <div>
+              <div class="brand-name">Badboy Barber</div>
+              <div class="brand-sub">POS • Sales • Reports</div>
+            </div>
+          </div>
+
+          <h1 id="loginTitle" class="headline">Masuk ke kasir</h1>
+          <p class="subtext">Kelola penjualan, stok, dan laporan harian dengan lebih cepat.</p>
+
+          <form id="loginForm" novalidate>
+            <div class="field">
+              <label for="username">Username</label>
+              <input id="username" name="username" type="text" autocomplete="username" placeholder="Masukkan username" />
+              <div id="usernameError" class="field-error" aria-live="polite"></div>
+            </div>
+
+            <div class="field">
+              <label for="pin">PIN</label>
+              <input id="pin" name="pin" type="password" autocomplete="current-password" placeholder="Masukkan PIN" />
+              <div id="pinError" class="field-error" aria-live="polite"></div>
+            </div>
+
+            <div class="login-actions">
+              <button type="submit" class="btn btn-primary">Masuk</button>
+            </div>
+            <div class="form-note">Login aman untuk admin / cashier</div>
+          </form>
+        </div>
+      </section>
+
+      <section id="mainScreen" class="main-screen">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="brand-mark" aria-hidden="true" style="width:40px;height:40px;border-radius:12px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2.5v5M8 8h8M6 12a6 6 0 1 0 12 0M12 18v3" />
+              </svg>
+            </div>
+            <div>
+              <div class="brand-name" style="font-size:1rem;">Badboy Barber</div>
+              <div class="brand-sub">Cashier dashboard</div>
+            </div>
+          </div>
+
+          <nav class="nav" aria-label="Main navigation">
+            <button type="button" class="active">POS</button>
+            <button type="button">Barang</button>
+            <button type="button">Laporan</button>
+            <button type="button">Database</button>
+          </nav>
+        </header>
+
+        <main class="content">
+          <section class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Ringkasan hari ini</h2>
+              <span class="pill">Senin, 21 Sep</span>
+            </div>
+
+            <div class="stat-grid">
+              <div class="stat">
+                <div class="stat-label">Penjualan</div>
+                <div class="stat-value">Rp 4.250K</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Transaksi</div>
+                <div class="stat-value">38</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Rata-rata</div>
+                <div class="stat-value">Rp 112K</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label">Produk</div>
+                <div class="stat-value">Rp 1.430K</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Point of Sale</h2>
+              <span class="muted">Cabang: Pleret</span>
+            </div>
+
+            <div class="cart-layout">
+              <div>
+                <div class="item-grid">
+                  <button class="item-card selected" type="button">
+                    <div class="item-icon">✂️</div>
+                    <div class="item-name">Haircut</div>
+                    <div class="item-price">Rp 35.000</div>
+                  </button>
+                  <button class="item-card" type="button">
+                    <div class="item-icon">🧴</div>
+                    <div class="item-name">Hair Wash</div>
+                    <div class="item-price">Rp 20.000</div>
+                  </button>
+                  <button class="item-card" type="button">
+                    <div class="item-icon">💈</div>
+                    <div class="item-name">Beard Trim</div>
+                    <div class="item-price">Rp 25.000</div>
+                  </button>
+                  <button class="item-card" type="button">
+                    <div class="item-icon">🧼</div>
+                    <div class="item-name">Shampoo</div>
+                    <div class="item-price">Rp 15.000</div>
+                  </button>
+                  <button class="item-card" type="button">
+                    <div class="item-icon">🧢</div>
+                    <div class="item-name">Cap</div>
+                    <div class="item-price">Rp 12.000</div>
+                  </button>
+                  <button class="item-card" type="button">
+                    <div class="item-icon">✂️</div>
+                    <div class="item-name">Kids Cut</div>
+                    <div class="item-price">Rp 30.000</div>
+                  </button>
+                </div>
+              </div>
+
+              <aside>
+                <div class="panel" style="padding:14px; margin-top:0;">
+                  <div class="panel-header" style="margin-bottom:12px;">
+                    <h3 class="panel-title" style="font-size:0.96rem;">Keranjang</h3>
+                    <span class="badge">3 item</span>
+                  </div>
+
+                  <div class="cart-list">
+                    <div class="cart-row">
+                      <div>
+                        <div style="font-weight:700;">Haircut</div>
+                        <div class="muted">Rp 35.000</div>
+                      </div>
+                      <div class="qty-box">
+                        <button type="button" aria-label="Kurangi">−</button>
+                        <span>1</span>
+                        <button type="button" aria-label="Tambah">+</button>
+                      </div>
+                    </div>
+                    <div class="cart-row">
+                      <div>
+                        <div style="font-weight:700;">Shampoo</div>
+                        <div class="muted">Rp 15.000</div>
+                      </div>
+                      <div class="qty-box">
+                        <button type="button" aria-label="Kurangi">−</button>
+                        <span>2</span>
+                        <button type="button" aria-label="Tambah">+</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="total-box">
+                    <span>Total</span>
+                    <span>Rp 65.000</span>
+                  </div>
+
+                  <div style="display:flex; gap:10px; margin-top:16px;">
+                    <button type="button" class="btn btn-ghost" style="flex:1;">Batal</button>
+                    <button type="button" class="btn btn-primary" style="flex:1;">Bayar</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Daftar transaksi</h2>
+              <button type="button" class="btn btn-ghost">Export CSV</button>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Waktu</th>
+                    <th>Jumlah</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>#1042</td>
+                    <td>09:15</td>
+                    <td>Rp 85.000</td>
+                    <td><span class="badge">Selesai</span></td>
+                  </tr>
+                  <tr>
+                    <td>#1041</td>
+                    <td>08:44</td>
+                    <td>Rp 120.000</td>
+                    <td><span class="badge">Selesai</span></td>
+                  </tr>
+                  <tr>
+                    <td>#1040</td>
+                    <td>08:10</td>
+                    <td>Rp 65.000</td>
+                    <td><span class="badge">Selesai</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <div id="toast" class="toast" aria-live="polite" aria-atomic="true"></div>
+
+    <script>
+      const loginForm = document.getElementById('loginForm');
+      const loginScreen = document.getElementById('loginScreen');
+      const mainScreen = document.getElementById('mainScreen');
+      const toast = document.getElementById('toast');
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => toast.classList.remove('show'), 1800);
+      }
+
+      loginForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        const username = document.getElementById('username').value.trim();
+        const pin = document.getElementById('pin').value.trim();
+        const usernameError = document.getElementById('usernameError');
+        const pinError = document.getElementById('pinError');
+
+        usernameError.textContent = '';
+        pinError.textContent = '';
+
+        if (!username) {
+          usernameError.textContent = 'Username wajib diisi.';
+          return;
+        }
+
+        if (!pin) {
+          pinError.textContent = 'PIN wajib diisi.';
+          return;
+        }
+
+        loginScreen.style.display = 'none';
+        mainScreen.style.display = 'block';
+        showToast('Login berhasil');
+      });
+
+      document.querySelectorAll('.nav button').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('.nav button').forEach((btn) => btn.classList.remove('active'));
+          button.classList.add('active');
+        });
+      });
+    </script>
+  </body>
+</html>

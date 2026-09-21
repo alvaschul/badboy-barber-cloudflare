@@ -1086,7 +1086,7 @@ header.bar{
    BADBOY BARBER — POS v2 (modern redesign)
    =========================================================== */
 
-const API = "https://badboy-barber-api.YOUR-SUBDOMAIN.workers.dev/api";
+const API = "https://badboy-barber-api.feellzzmartijn.workers.dev/api";
 const k = n => Math.round(n / 1000) + "K";
 const fmt = n => "Rp " + Math.round(Number(n) || 0).toLocaleString("id-ID");
 const R = async (f) => {
@@ -1525,7 +1525,6 @@ function updateCartBar() {
   if (hintTxt) { if (count === 0) hintTxt.textContent = "Services & products will appear here after you select them."; else if (!CURRENT_CABANG) hintTxt.textContent = count + " items in cart · total " + fmt(total) + " (no branch selected)."; else hintTxt.textContent = count + " items in cart · total " + fmt(total) + "."; }
 }
 document.getElementById("cart-clear")?.addEventListener("click", clearCart);
-document.getElementById("pay-complete")?.addEventListener("click", payComplete);
   document.querySelectorAll('.pm-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.pm-btn').forEach(b => b.classList.remove('active'));
@@ -1535,20 +1534,6 @@ document.getElementById("pay-complete")?.addEventListener("click", payComplete);
   });
 
 async function payComplete() {
-  // Ensure button is visible and clickable
-  const btn = document.getElementById('pay-complete');
-  if (btn) {
-    btn.style.position = 'fixed';
-    btn.style.bottom = '20px';
-    btn.style.left = '50%';
-    btn.style.transform = 'translateX(-50%)';
-    btn.style.width = '90%';
-    btn.style.maxWidth = '350px';
-    btn.style.zIndex = '1000';
-    btn.style.borderRadius = '12px';
-    btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-  }
-
   if (CART.length === 0) return;
   const rev = CART.reduce((s,c) => c.category === "service" ? s + c.price * c.qty : s, 0);
   const prod = CART.reduce((s,c) => c.category === "product" ? s + c.price * c.qty : s, 0);
@@ -1807,8 +1792,7 @@ async function authFetch(url, opts = {}) {
   document.getElementById("modal-delete-section")?.addEventListener("click", (e) => { if (e.target.id === "modal-delete-section") document.getElementById("modal-delete").classList.remove("show"); });
   document.getElementById("cart-clear")?.addEventListener("click", clearCart);
   document.getElementById("pay-complete")?.addEventListener("click", payComplete);
-
-  document.getElementById("lp-date")?.addEventListener("input", () => { document.getElementById("lp-date-unread").classList.remove("show"); });
+    document.getElementById("lp-date")?.addEventListener("input", () => { document.getElementById("lp-date-unread").classList.remove("show"); });
   document.getElementById("lp-cabang")?.addEventListener("input", () => { document.getElementById("lp-cabang-unread").classList.remove("show"); });
   document.getElementById("lp-cabang-fill")?.addEventListener("click", () => { const input = document.getElementById("lp-cabang"); if (CURRENT_CABANG && cabangOptions.find(c => String(c.id) === CURRENT_CABANG)) { input.value = cabangOptions.find(c => String(c.id) === CURRENT_CABANG).name || ""; document.getElementById("lp-cabang-unread").classList.remove("show"); } else { input.value = ""; input.focus(); } });
 })();

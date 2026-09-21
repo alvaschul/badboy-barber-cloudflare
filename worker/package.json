@@ -1,0 +1,13 @@
+{
+  "name": "badboy-barber-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "jose": "^5.10.0",
+    "wrangler": "^3.0.0"
+  }
+}

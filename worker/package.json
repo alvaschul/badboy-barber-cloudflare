@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "deploy": "wrangler deploy"
+  "dependencies": {
+    "jose": "^5.0.0"
   },
   "devDependencies": {
-    "jose": "^5.10.0",
     "wrangler": "^3.0.0"
+  },
+  "scripts": {
+    "deploy": "wrangler deploy"
   }
 }

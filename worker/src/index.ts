@@ -25,17 +25,6 @@ export default {
     const url = new URL(request.url);
     const router = new Router();
     
-    // Get origin from request - for CORS we echo back the request origin
-    // This allows any Pages URL (with hash or without) to work
-    const requestOrigin = request.headers.get('Origin');
-    let allowedOrigin = env.ALLOWED_ORIGINS || '*';
-    
-    // If request has Origin header, use it for CORS (allows Pages preview URLs)
-    if (requestOrigin) {
-      // Allow the request origin (works for any Pages URL)
-      allowedOrigin = requestOrigin;
-    }
-
     router.use('/api/auth', authRoutes());
     router.use('/api/items', itemsRoutes());
     router.use('/api/transactions', transactionsRoutes());
@@ -47,17 +36,35 @@ export default {
       headers: { 'Content-Type': 'application/json' }
     }));
 
+    let response: Response;
+    
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
+      response = new Response(null, {
         headers: {
-          'Access-Control-Allow-Origin': allowedOrigin,
+          'Access-Control-Allow-Origin': request.headers.get('Origin') || '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Access-Control-Max-Age': '86400',
         }
       });
+    } else {
+      response = await router.handle(request, env, ctx);
     }
-
-    return router.handle(request, env, ctx);
+    
+    // Add CORS headers to all responses dynamically
+    const origin = request.headers.get('Origin');
+    if (origin) {
+      // Clone the response so we can modify headers without consuming the body
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set('Access-Control-Allow-Origin', origin);
+      newHeaders.set('Access-Control-Allow-Credentials', 'true');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    }
+    
+    return response;
   }
 };

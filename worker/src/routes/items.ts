@@ -1,15 +1,13 @@
-import { Router } from '../utils/router';
+import { Router, type Context } from '../utils/router';
 
 function normalizeBranchId(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
     return null;
   }
-
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error('Invalid branch id');
   }
-
   return parsed;
 }
 
@@ -59,10 +57,7 @@ export function itemsRoutes() {
       }));
       
       return new Response(JSON.stringify({ items: result }), {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('List items error:', e);
@@ -104,7 +99,7 @@ export function itemsRoutes() {
           headers: { 'Content-Type': 'application/json' }
         });
       }
-
+      
       if (branchId !== null) {
         const branch = await env.DB.prepare('SELECT id FROM branches WHERE id = ?').bind(branchId).first();
         if (!branch) {
@@ -115,17 +110,25 @@ export function itemsRoutes() {
         }
       }
       
-      const result = await env.DB.prepare(
+      const name = body.name.trim();
+      const category = body.category || 'service';
+      
+      await env.DB.prepare(
         `INSERT INTO items (name, price, category, branch_id, is_active, is_hidden)
          VALUES (?, ?, ?, ?, 1, 0)`
-      ).bind(
-        body.name.trim(),
-        body.price,
-        body.category || 'service',
-        branchId
-      ).run();
+      ).bind(name, body.price, category, branchId).run();
       
-      const newItem = await env.DB.prepare('SELECT * FROM items WHERE id = ?').bind(result.lastInsertRowid).first();
+      // Get the ID of the newly created item
+      const newItem = await env.DB.prepare(
+        'SELECT * FROM items WHERE name = ? AND price = ? ORDER BY id DESC LIMIT 1'
+      ).bind(name, body.price).first();
+      
+      if (!newItem) {
+        return new Response(JSON.stringify({ detail: 'Failed to create item' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
       
       return new Response(JSON.stringify({
         id: newItem.id,
@@ -137,10 +140,7 @@ export function itemsRoutes() {
         hidden: false
       }), {
         status: 201,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('Create item error:', e);
@@ -191,29 +191,8 @@ export function itemsRoutes() {
         params.push(body.hidden ? 1 : 0);
       }
       if (body.cabang_id !== undefined) {
-        const normalizedBranchId = body.cabang_id === null || body.cabang_id === ''
-          ? null
-          : normalizeBranchId(body.cabang_id);
-
-        if (body.cabang_id !== null && body.cabang_id !== '' && normalizedBranchId === null) {
-          return new Response(JSON.stringify({ detail: 'Invalid cabang_id' }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-
-        if (normalizedBranchId !== null) {
-          const branch = await env.DB.prepare('SELECT id FROM branches WHERE id = ?').bind(normalizedBranchId).first();
-          if (!branch) {
-            return new Response(JSON.stringify({ detail: 'Branch not found' }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-        }
-
         updates.push('branch_id = ?');
-        params.push(normalizedBranchId);
+        params.push(normalizeBranchId(body.cabang_id));
       }
       
       if (updates.length === 0) {
@@ -237,10 +216,7 @@ export function itemsRoutes() {
         active: Boolean(updated.is_active),
         hidden: Boolean(updated.is_hidden)
       }), {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('Update item error:', e);
@@ -256,15 +232,11 @@ export function itemsRoutes() {
     try {
       const id = parseInt(ctx.params.id);
       
-      // Delete related transaction items first
       await env.DB.prepare('DELETE FROM transaction_items WHERE item_id = ?').bind(id).run();
       await env.DB.prepare('DELETE FROM items WHERE id = ?').bind(id).run();
       
       return new Response(JSON.stringify({ id, deleted: true }), {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': env.ALLOWED_ORIGINS || '*'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {
       console.error('Delete item error:', e);

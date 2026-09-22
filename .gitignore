@@ -9,3 +9,15 @@ dist/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Wrangler cache
+.wrangler/
+worker/.wrangler/
+
+# Test/debug pages
+pages/test-login.html
+pages/test.html
+
+# Lock files (optional - can be committed)
+# package-lock.json
+# worker/package-lock.json

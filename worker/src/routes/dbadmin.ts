@@ -1,5 +1,5 @@
 import { Router, type Context } from '../utils/router';
-import { verifyToken } from '../utils/jwt';
+import { requireAdmin } from '../utils/auth';
 
 // Whitelist of tables exposed via dbadmin
 const ALLOWED_TABLES = ['items', 'transactions', 'transaction_items', 'branches', 'users'];
@@ -48,29 +48,15 @@ export function dbadminRoutes() {
   const router = new Router();
   
   // Helper to require admin auth
-  async function requireAdmin(req: Request, env: any): Promise<any> {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return { error: true, response: new Response(JSON.stringify({ detail: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      })};
-    }
-    
-    const payload = await verifyToken(authHeader.slice(7));
-    if (!payload || payload.role !== 'admin') {
-      return { error: true, response: new Response(JSON.stringify({ detail: 'Admin access required' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' }
-      })};
-    }
-    
-    return { error: false, payload };
+  async function requireAdminAuth(req: Request, env: any): Promise<any> {
+    const auth = await requireAdmin(req, env);
+    if (!auth.ok) return { error: true, response: auth.response };
+    return { error: false, payload: auth.payload };
   }
   
   // GET /api/db/tables
   router.get('/tables', async (req: Request, env: any, ctx: Context) => {
-    const auth = await requireAdmin(req, env);
+    const auth = await requireAdminAuth(req, env);
     if (auth.error) return auth.response;
     
     const tables = ALLOWED_TABLES;
@@ -89,7 +75,7 @@ export function dbadminRoutes() {
   
   // GET /api/db/table/:name
   router.get('/table/:name', async (req: Request, env: any, ctx: Context) => {
-    const auth = await requireAdmin(req, env);
+    const auth = await requireAdminAuth(req, env);
     if (auth.error) return auth.response;
     
     const table = ctx.params.name;
@@ -127,7 +113,7 @@ export function dbadminRoutes() {
   
   // POST /api/db/query - raw SELECT queries only
   router.post('/query', async (req: Request, env: any, ctx: Context) => {
-    const auth = await requireAdmin(req, env);
+    const auth = await requireAdminAuth(req, env);
     if (auth.error) return auth.response;
     
     const body = await req.json() as { query: string };
@@ -135,10 +121,12 @@ export function dbadminRoutes() {
     try {
       const query = sanitizeAdminQuery(body.query);
       const result = await env.DB.prepare(query).all();
+      const rows = result.results;
+      const columns = rows.length > 0 ? (rows[0] ? Object.keys(rows[0]) : []) : [];
       return new Response(JSON.stringify({
-        columns: result.columns,
-        rows: result.results,
-        truncated: result.results.length >= 500
+        columns: columns.map((c: string) => ({ name: c })),
+        rows,
+        truncated: rows.length >= 500
       }), {
         headers: { 
           'Content-Type': 'application/json',
@@ -158,7 +146,7 @@ export function dbadminRoutes() {
   
   // PATCH /api/db/row/:table/:id
   router.patch('/row/:table/:id', async (req: Request, env: any, ctx: Context) => {
-    const auth = await requireAdmin(req, env);
+    const auth = await requireAdminAuth(req, env);
     if (auth.error) return auth.response;
     
     const table = ctx.params.table;
@@ -199,7 +187,7 @@ export function dbadminRoutes() {
   
   // DELETE /api/db/row/:table/:id
   router.delete('/row/:table/:id', async (req: Request, env: any, ctx: Context) => {
-    const auth = await requireAdmin(req, env);
+    const auth = await requireAdminAuth(req, env);
     if (auth.error) return auth.response;
     
     const table = ctx.params.table;

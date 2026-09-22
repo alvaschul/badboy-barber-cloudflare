@@ -1,32 +1,13 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 const ALGORITHM = 'HS256';
-const DEFAULT_JWT_SECRET = 'badboy-barber-cloudflare-default-secret-change-me';
 
-function getJwtSecret(): string {
-  if (typeof globalThis !== 'undefined') {
-    const globalSecret =
-      (globalThis as any).SECRET_KEY ??
-      (globalThis as any).JWT_SECRET ??
-      (globalThis as any).__JWT_SECRET__;
-
-    if (typeof globalSecret === 'string' && globalSecret.trim().length > 0) {
-      return globalSecret;
-    }
+export function getJwtSecret(env: any): string {
+  const secret = env?.SECRET_KEY ?? env?.JWT_SECRET ?? env?.BADBOY_BARBBER_SECRET;
+  if (typeof secret === 'string' && secret.trim().length > 0) {
+    return secret;
   }
-
-  if (typeof process !== 'undefined' && process.env) {
-    const envSecret =
-      process.env.SECRET_KEY ??
-      process.env.JWT_SECRET ??
-      process.env.BADBOY_BARBBER_SECRET;
-
-    if (typeof envSecret === 'string' && envSecret.trim().length > 0) {
-      return envSecret;
-    }
-  }
-
-  return DEFAULT_JWT_SECRET;
+  throw new Error('JWT_SECRET is not configured. Set the SECRET_KEY secret binding.');
 }
 
 export async function hashPin(pin: string): Promise<string> {
@@ -53,8 +34,8 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   return computed === hash;
 }
 
-export async function createToken(payload: Omit<JWTPayload, 'exp'>, expiresIn: number = 60 * 60 * 24): Promise<string> {
-  const secret = getJwtSecret();
+export async function createToken(payload: Omit<JWTPayload, 'exp'>, env: any, expiresIn: number = 60 * 60 * 24): Promise<string> {
+  const secret = getJwtSecret(env);
 
   return new SignJWT(payload as JWTPayload)
     .setProtectedHeader({ alg: ALGORITHM })
@@ -63,9 +44,10 @@ export async function createToken(payload: Omit<JWTPayload, 'exp'>, expiresIn: n
     .sign(new TextEncoder().encode(secret));
 }
 
-export async function verifyToken(token: string): Promise<JWTPayload | null> {
+export async function verifyToken(token: string, env: any): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(getJwtSecret()));
+    const secret = getJwtSecret(env);
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
     return payload as JWTPayload;
   } catch {
     return null;

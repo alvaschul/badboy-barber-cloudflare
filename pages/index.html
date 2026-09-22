@@ -1412,8 +1412,8 @@ function openCabangAdd() {
     if (e.key === "Escape") input.remove();
   });
 }
-async function addCabang(name) { try { const j = await R(() => fetch(API + "/cabang", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ name }) }).then(r => r.json())); return !!j?.id; } catch (e) { return false; } }
-async function deleteCabang(id) { try { const j = await R(() => fetch(API + "/cabang/" + id, { method:"DELETE" }).then(r => r.json())); return !!j?.deleted; } catch (e) { return false; } }
+async function addCabang(name) { try { const j = await R(() => authFetch(API + "/cabang", { method:"POST", body: JSON.stringify({ name }) }).then(r => r.json())); return !!j?.id; } catch (e) { return false; } }
+async function deleteCabang(id) { try { const j = await R(() => authFetch(API + "/cabang/" + id, { method:"DELETE" }).then(r => r.json())); return !!j?.deleted; } catch (e) { return false; } }
 
 /* ---------- POS items ---------- */
 let _posSeq=0;
@@ -1541,7 +1541,7 @@ async function payComplete() {
   const isQris = PAY_METHOD === "qris";
   const data = { total_amount: total, cash_amount: isQris ? 0 : total, qris_amount: isQris ? total : 0, change_amount: 0, notes: CURRENT_CABANG ? "cabang:" + cabangOptions.find(c=>String(c.id)===CURRENT_CABANG)?.name || "" : "", user_id: 1, cabang_id: CURRENT_CABANG ? parseInt(CURRENT_CABANG, 10) : null, items: CART.map(c => ({ item_id: c.item_id, quantity: c.qty, qty: c.qty, price: c.price, unit_price: c.price })) };
   try {
-    const j = await R(() => fetch(API + "/transactions", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data) }).then(r => r.json()));
+    const j = await R(() => authFetch(API + "/transactions", { method:"POST", body: JSON.stringify(data) }).then(r => r.json()));
     if (j?.id) { toast("Transaction saved. Thank you.", "success"); CART = []; updateCartBar(); refreshKPI(); refreshTxnList(); }
     else toast("Failed to save transaction.", "error");
   } catch (e) { toast("Connection failed.", "error"); }
@@ -1549,7 +1549,7 @@ async function payComplete() {
 
 /* ---------- KPIs / transaction list ---------- */
 async function refreshKPI() {
-  const j = await R(() => fetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
+  const j = await R(() => authFetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
   if (!j) return;
   const s = j.summary || {};
   const el = id => document.getElementById(id);
@@ -1561,7 +1561,7 @@ async function refreshKPI() {
 async function refreshTxnList() {
   const wrap = document.getElementById("txn-list"), empty = document.getElementById("txn-empty");
   if (!wrap) return; wrap.innerHTML = "";
-  const j = await R(() => fetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
+  const j = await R(() => authFetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
   const list = j?.transactions || [];
   if (!list.length) { if (empty) empty.classList.remove("hidden"); return; }
   if (empty) empty.classList.add("hidden");
@@ -1579,8 +1579,8 @@ document.getElementById("export-csv")?.addEventListener("click", exportCSV);
   document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible"){ try{ const tj=todayJKT(); const dp=document.getElementById("lp-date"); if(dp && dp.value && dp.value < tj){ dp.value=tj; } const pdEl=document.getElementById("pos-date"); if(pdEl && dp){ try{ const d=new Date(dp.value+"T00:00:00"); pdEl.textContent=d.toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   setInterval(()=>{ try{ const tj=todayJKT(); const dp=document.getElementById("lp-date"); if(dp && dp.value && dp.value < tj){ dp.value=tj; updateKpiDateNav(); refreshKPI(); refreshTxnList(); } }catch(e){} }, 60000);}catch(e){} } }catch(e){} } });
 
-function exportCSV() {
-  const j = R(() => fetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
+async function exportCSV() {
+  const j = await R(() => authFetch(API + "/reports/daily-summary?date=" + document.getElementById("lp-date").value).then(r => r.json()));
   const list = j?.transactions || [];
   if (!list.length) return;
   const rows = [["id","tanggal","total_amount","cash_amount","qris_amount","change_amount","notes"]];
@@ -1620,12 +1620,12 @@ async function renderMgmtItems() {
 }
 const MGMODE_ITEM = Symbol("mgmt-item");
 function handleMgmtAction(action, it) { if (action === "edit") openItemModal(it); else if (action === "hide") toggleItemHidden(it); else if (action === "delete") prepareDeleteConfirm(it); }
-async function toggleItemHidden(it) { try { const r = await fetch(API + "/items/" + it.id, { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ hidden: !it.hidden }) }); if (r.ok) { it.hidden = !it.hidden; renderMgmtItems(); toast(it.hidden ? "Hidden" : "Restored", "success"); } } catch (e) {} }
+async function toggleItemHidden(it) { try { const r = await authFetch(API + "/items/" + it.id, { method:"PATCH", body: JSON.stringify({ hidden: !it.hidden }) }); if (r.ok) { it.hidden = !it.hidden; renderMgmtItems(); toast(it.hidden ? "Hidden" : "Restored", "success"); } } catch (e) {} }
 function prepareDeleteConfirm(it) {
   const modal = document.getElementById("modal-delete"), title = document.getElementById("modal-delete-title"), msg = document.getElementById("modal-delete-msg"), ok = document.getElementById("modal-delete-ok");
   title.textContent = "Delete \"" + it.name + "\"?"; msg.textContent = "This service / product will be permanently deleted.";
   ok.dataset.itemId = String(it.id);
-  ok.onclick = async () => { try { const r = await fetch(API + "/items/" + it.id, { method:"DELETE" }); if (r.ok) { modal.classList.remove("show"); renderMgmtItems(); toast("Deleted", "success"); } } catch (e) {} };
+  ok.onclick = async () => { try { const r = await authFetch(API + "/items/" + it.id, { method:"DELETE" }); if (r.ok) { modal.classList.remove("show"); renderMgmtItems(); toast("Deleted", "success"); } } catch (e) {} };
   modal.classList.add("show");
 }
 document.getElementById("modal-delete-cancel")?.addEventListener("click", () => document.getElementById("modal-delete").classList.remove("show"));
@@ -1661,7 +1661,7 @@ modalForm.addEventListener("submit", async (e) => {
   if (!cabangId) { setErr("mf-cabang-err","Select a branch."); return; }
   try {
     const url = modalMode === "edit" ? API + "/items/" + modalItem.id : API + "/items"; const method = modalMode === "edit" ? "PATCH" : "POST"; const body = modalMode === "edit" ? { name, price, category, hidden } : { name, price, category, cabang_id: parseInt(cabangId,10) };
-    const r = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+    const r = await authFetch(url, { method, body: JSON.stringify(body) });
     if (r.ok) { hideModal(); try{ if(modalMode==="add" && cabangId){ CURRENT_CABANG = String(cabangId); try{localStorage.setItem("bs_cabang", CURRENT_CABANG);}catch(e){} renderCabangChips(); renderCabangFilterChips(); updateCartBar(); } }catch(e){} renderMgmtItems(); populatePosItems(); toast(modalMode === "edit" ? "Updated" : "Added", "success"); }
     else { const j = await r.json(); setErr("mf-general-err", j?.detail || "Failed to save item."); }
   } catch (err) { setErr("mf-general-err", "Failed to connect to server."); }
@@ -1674,7 +1674,7 @@ function saveLpSaved() { try { localStorage.setItem(lpSavedKey, JSON.stringify(l
 async function loadLaporanBarbers() {
   const wrap = document.getElementById("lp-barbers"); if (!wrap) return; wrap.innerHTML = "";
   let users=[];
-  try { const j = await R(() => fetch(API + "/reports/daily-detail").then(r => r.json())); users = j?.users || []; } catch (e) { users=[]; }
+  try { const j = await R(() => authFetch(API + "/reports/daily-detail").then(r => r.json())); users = j?.users || []; } catch (e) { users=[]; }
   users.forEach(u => { const chip = document.createElement("div"); chip.className = "lpc active"; chip.dataset.name = u.name; chip.innerHTML = `<span class="icon icon-xs"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M2 12a5 5 0 018-2" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></span><span>${esc(u.name)}</span><button class="rm" title="Remove" aria-label="Remove"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></button>`; chip.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".rm")) { chip.classList.remove("active"); } else { chip.classList.toggle("active"); } }); chip.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); chip.classList.remove("active"); }); wrap.appendChild(chip); });
   const savedWrap = document.getElementById("lp-barbers-saved"); if (!savedWrap) return; savedWrap.innerHTML = "";
   lpSaved.forEach(name => { const chip = document.createElement("div"); chip.className = "lpc active"; chip.dataset.name = name; chip.innerHTML = `<span class="icon icon-xs"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M2 12a5 5 0 018-2" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></span><span>${esc(name)}</span><button class="rm" title="Remove" aria-label="Remove"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg></button>`; chip.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".rm")) { chip.classList.remove("active"); } else { chip.classList.toggle("active"); } }); chip.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); lpSaved = lpSaved.filter(n => n !== name); saveLpSaved(); chip.remove(); }); savedWrap.appendChild(chip); });
@@ -1698,7 +1698,7 @@ function generateLaporan() {
   if (!cabang) { document.getElementById("lp-cabang-unread").classList.add("show"); ok = false; }
   if (!awal || isNaN(awal) || awal < 0) { document.getElementById("lp-awal-unread").classList.add("show"); ok = false; }
   if (!ok) return;
-  const j = R(() => fetch(API + "/reports/daily-detail?date=" + date).then(r => r.json()));
+  const j = R(() => authFetch(API + "/reports/daily-detail?date=" + date).then(r => r.json()));
   j.then(data => {
     const checked = []; document.querySelectorAll("#lp-barbers .lpc.active, #lp-barbers-saved .lpc.active").forEach(el => { const name = el.dataset.name; if (name && !checked.includes(name)) checked.push(name); });
     if (!checked.length) { const hint = document.getElementById("lp-cap-unread"); if (hint) hint.classList.add("show"); return; }

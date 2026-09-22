@@ -1,4 +1,5 @@
 import { Router, type Context } from '../utils/router';
+import { requireAuth } from '../utils/auth';
 
 export function branchesRoutes() {
   const router = new Router();
@@ -37,6 +38,9 @@ export function branchesRoutes() {
   // POST /api/cabang - create branch
   router.post('/', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const body = await req.json() as { name: string };
       
       if (!body.name || body.name.trim().length < 1) {
@@ -47,14 +51,10 @@ export function branchesRoutes() {
       }
       
       const name = body.name.trim();
-      await env.DB.prepare('INSERT INTO branches (name) VALUES (?)').bind(name).run();
-      
-      // Get the ID of the newly created branch
-      const newBranch = await env.DB.prepare(
-        'SELECT id FROM branches WHERE name = ? ORDER BY id DESC LIMIT 1'
-      ).bind(name).first();
-      
-      return new Response(JSON.stringify({ id: newBranch?.id }), {
+      const result = await env.DB.prepare('INSERT INTO branches (name) VALUES (?)').bind(name).run();
+      const newId = result.meta.last_row_id;
+
+      return new Response(JSON.stringify({ id: Number(newId) }), {
         status: 201,
         headers: { 
           'Content-Type': 'application/json',
@@ -73,6 +73,9 @@ export function branchesRoutes() {
   // DELETE /api/cabang/:id - delete branch
   router.delete('/:id', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const id = parseInt(ctx.params.id);
       
       const used = await env.DB.prepare(

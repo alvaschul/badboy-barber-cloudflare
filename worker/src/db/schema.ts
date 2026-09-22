@@ -76,7 +76,7 @@ export async function initDb(db: D1Database): Promise<void> {
  */
 export async function seedAdminUser(db: D1Database, username: string, pin: string): Promise<void> {
   const { hashPin } = await import('../utils/jwt');
-  const pinHash = hashPin(pin);
+  const pinHash = await hashPin(pin);
   
   const existing = await db.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
   if (!existing) {

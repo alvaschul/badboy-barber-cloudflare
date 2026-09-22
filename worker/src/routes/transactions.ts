@@ -1,5 +1,5 @@
 import { Router, type Context } from '../utils/router';
-import { verifyToken } from '../utils/jwt';
+import { requireAuth } from '../utils/auth';
 
 function parsePositiveInteger(value: unknown, label: string): number {
   if (value === undefined || value === null) {
@@ -21,32 +21,6 @@ function parseNonNegativeNumber(value: unknown, label: string): number {
     throw new Error(`${label} must be a non-negative number`);
   }
   return parsed;
-}
-
-async function requireAuth(req: Request, env: any): Promise<{ ok: boolean; response?: Response; payload?: any }> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return {
-      ok: false,
-      response: new Response(JSON.stringify({ detail: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    };
-  }
-
-  const payload = await verifyToken(authHeader.slice(7));
-  if (!payload || !payload.user_id) {
-    return {
-      ok: false,
-      response: new Response(JSON.stringify({ detail: 'Invalid token' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    };
-  }
-
-  return { ok: true, payload };
 }
 
 export function transactionsRoutes() {
@@ -126,11 +100,7 @@ export function transactionsRoutes() {
          VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)`
       ).bind(userId, computedTotal, cash, qris, expectedChange, body.notes || '', date).run();
 
-      // Get transaction ID
-      const tx = await db.prepare(
-        'SELECT id FROM transactions WHERE user_id = ? AND date = ? AND total_amount = ? ORDER BY id DESC LIMIT 1'
-      ).bind(userId, date, computedTotal).first();
-      const transactionId = tx?.id;
+      const transactionId = txResult.meta.last_row_id;
 
       if (!transactionId) {
         return new Response(JSON.stringify({ detail: 'Failed to create transaction' }), {

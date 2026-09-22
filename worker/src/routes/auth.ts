@@ -34,7 +34,7 @@ export function authRoutes() {
         sub: user.username,
         user_id: user.id,
         role: user.role
-      });
+      }, env);
 
       return new Response(JSON.stringify({
         access_token: token,
@@ -84,7 +84,7 @@ export function authRoutes() {
         sub: user.username,
         user_id: user.id,
         role: user.role
-      });
+      }, env);
 
       return new Response(JSON.stringify({
         access_token: token,
@@ -118,7 +118,7 @@ export function authRoutes() {
         });
       }
 
-      const payload = await verifyToken(accessToken);
+      const payload = await verifyToken(accessToken, env);
 
       if (!payload || !payload.user_id) {
         return new Response(JSON.stringify({ detail: 'Invalid token' }), {
@@ -142,7 +142,7 @@ export function authRoutes() {
         sub: user.username,
         user_id: user.id,
         role: user.role
-      });
+      }, env);
 
       return new Response(JSON.stringify({
         access_token: token,
@@ -174,7 +174,7 @@ export function authRoutes() {
         });
       }
 
-      const payload = await verifyToken(authHeader.slice(7));
+      const payload = await verifyToken(authHeader.slice(7), env);
       if (!payload || !payload.user_id) {
         return new Response(JSON.stringify({ detail: 'Invalid token' }), {
           status: 401,

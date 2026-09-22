@@ -1,31 +1,5 @@
 import { Router } from '../utils/router';
-import { verifyToken } from '../utils/jwt';
-
-async function requireAuth(req: Request, env: any): Promise<{ ok: boolean; response?: Response; payload?: any }> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return {
-      ok: false,
-      response: new Response(JSON.stringify({ detail: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    };
-  }
-
-  const payload = await verifyToken(authHeader.slice(7));
-  if (!payload || !payload.user_id) {
-    return {
-      ok: false,
-      response: new Response(JSON.stringify({ detail: 'Invalid token' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    };
-  }
-
-  return { ok: true, payload };
-}
+import { requireAuth } from '../utils/auth';
 
 export function reportsRoutes() {
   const router = new Router();
@@ -78,12 +52,15 @@ export function reportsRoutes() {
           total_transactions: summary.total_transactions || 0,
           total_revenue: summary.total_revenue || 0,
           total_cash: summary.total_cash || 0,
-          total_qris: summary.total_qris || 0
+          total_qris: summary.total_qris || 0,
+          total_sales,
+          total_products
         },
         total_sales: totalSales,
         total_products: totalProducts,
         items: breakdown.results.map((b: any) => ({
           id: b.id,
+          item_id: b.id,
           name: b.name,
           category: b.category,
           price: b.price,
@@ -158,6 +135,7 @@ export function reportsRoutes() {
         },
         items: breakdown.results.map((b: any) => ({
           id: b.id,
+          item_id: b.id,
           name: b.name,
           category: b.category,
           price: b.price,

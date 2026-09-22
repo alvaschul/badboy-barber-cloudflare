@@ -1,4 +1,5 @@
 import { Router, type Context } from '../utils/router';
+import { requireAuth } from '../utils/auth';
 
 function normalizeBranchId(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') {
@@ -19,7 +20,7 @@ export function itemsRoutes() {
     try {
       const url = new URL(req.url);
       const all = url.searchParams.get('all') === 'true';
-      const active = url.searchParams.get('active') === 'true';
+      const activeParam = url.searchParams.get('active');
       const cabang = url.searchParams.get('cabang');
       const cabangId = cabang === null || cabang === '' ? null : Number(cabang);
       
@@ -30,7 +31,7 @@ export function itemsRoutes() {
       if (!all) {
         conditions.push('is_active = 1');
       }
-      if (active !== null) {
+      if (activeParam === 'true') {
         conditions.push('is_hidden = 0');
       }
       if (cabangId !== null && Number.isInteger(cabangId) && cabangId >= 1) {
@@ -71,6 +72,9 @@ export function itemsRoutes() {
   // POST /api/items - create item
   router.post('/', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const body = await req.json() as {
         name: string;
         price: number;
@@ -113,29 +117,19 @@ export function itemsRoutes() {
       const name = body.name.trim();
       const category = body.category || 'service';
       
-      await env.DB.prepare(
+      const result = await env.DB.prepare(
         `INSERT INTO items (name, price, category, branch_id, is_active, is_hidden)
          VALUES (?, ?, ?, ?, 1, 0)`
       ).bind(name, body.price, category, branchId).run();
-      
-      // Get the ID of the newly created item
-      const newItem = await env.DB.prepare(
-        'SELECT * FROM items WHERE name = ? AND price = ? ORDER BY id DESC LIMIT 1'
-      ).bind(name, body.price).first();
-      
-      if (!newItem) {
-        return new Response(JSON.stringify({ detail: 'Failed to create item' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
+
+      const newId = result.meta.last_row_id;
+
       return new Response(JSON.stringify({
-        id: newItem.id,
-        name: newItem.name,
-        price: newItem.price,
-        category: newItem.category,
-        cabang_id: newItem.branch_id,
+        id: Number(newId),
+        name,
+        price: body.price,
+        category,
+        cabang_id: branchId,
         active: true,
         hidden: false
       }), {
@@ -154,6 +148,9 @@ export function itemsRoutes() {
   // PATCH /api/items/:id - update item
   router.patch('/:id', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const id = parseInt(ctx.params.id);
       const body = await req.json() as {
         name?: string;
@@ -230,6 +227,9 @@ export function itemsRoutes() {
   // DELETE /api/items/:id
   router.delete('/:id', async (req: Request, env: any, ctx: Context) => {
     try {
+      const auth = await requireAuth(req, env);
+      if (!auth.ok) return auth.response!;
+
       const id = parseInt(ctx.params.id);
       
       await env.DB.prepare('DELETE FROM transaction_items WHERE item_id = ?').bind(id).run();
